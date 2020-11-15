@@ -1,5 +1,10 @@
 import hmm
 
+# this HMM model does not work for this project
+# reason 1: it take too long to train, the algorithm is not efficient
+# reason 2: sequence paraphrasing task does not really have a clear state transformation and emition
+
+
 # for word at position 1
 states = ('rainy', 'sunny')
 symbols = ('walk', 'shop', 'clean')

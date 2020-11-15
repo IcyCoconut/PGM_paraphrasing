@@ -60,6 +60,7 @@ def sentencesToIds(sentences: list) -> torch.tensor:
         for j in range(min(MAX_LENGTH, len(word_list))):
             idx = dictionary[0].get(word_list[j])
             ids[i, j + 1] = idx if idx != None else dictionary[0]["<UNK>"]
+        print("{:.3f}%".format(i/n_sentences*100), end = "\r")
 
     return ids
 
@@ -126,6 +127,7 @@ class Sentences(torch.utils.data.Dataset):
         with codecs.open(self.input_path, "r", encoding="utf-8") as input_file:
             sentences = input_file.readlines()
             self.input_data = sentencesToIds(sentences)
+        print("Half loaded ...")
 
         with codecs.open(self.target_path, "r", encoding="utf-8") as target_file:
             sentences = target_file.readlines()

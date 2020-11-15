@@ -213,19 +213,20 @@ class DictionaryFactor():
         return len(self.dictionary)
 
 
-    def __setitem__(self, key: tuple or int, value: float):
+    def __setitem__(self, key: tuple or int, value):
         """
         set an item according to key, key must be a tuple or int
         value can be float or int or tensor
         """
+        if value == 0:
+            return
+
         assert (type(key) in [tuple, int]), "key must be a tuple or int"
 
         if type(key) == int:
             # if key is a single value tensor, also find the assignment
             key = self.indexToAssignment(key)
 
-
-        assert (len(key) == self.var.size(0)), "Invalid key"
         self.dictionary[key] = value
 
 
@@ -239,8 +240,6 @@ class DictionaryFactor():
         if type(key) == int:
             # if key is a single value tensor, also find the assignment
             key = self.indexToAssignment(key)
-
-        assert (len(key) == self.var.size(0)), "Invalid key"
 
         value = self.dictionary.get(key)
         return (0 if value == None else value)
@@ -310,6 +309,41 @@ class DictionaryFactor():
         return tuple(assignment)
 
 
+    def observe(self, observed_var, assignment):
+        """
+        Observe a variable
+        observed_var is the observed variable
+        assignment is the observed value of this variable
+        Example: factor.observe(1, 3) means variable 1 has assignment 3
+        """
+        var_idx = torch.where(self.var == observed_var)[0]
+
+        # if the original var is [1,2,3,4] and card is [2,3,2,3]
+        # observe (2, 1), then the new var is [1,3,4] and card is [2,2,3]
+        self.var = torch.cat([self.var[:var_idx], self.var[var_idx+1:]])
+        self.card = torch.cat([self.card[:var_idx], self.card[var_idx+1:]])
+
+        # following the previous comment, if there is an entry [0, 1, 0, 2] = 0.25
+        # then we observe variable 2 with value 1, we add a new entry [0, 0, 2] = 0.25
+        # and delete the old one. If there is an entry [1, 0, 1, 2] = 0.13, we do not 
+        # add any new entries, and directly remove this entry, becaue variable 2 is 0, not 1
+        keys = list(self.dictionary.keys())
+        for key in keys:
+            if key[var_idx] == assignment:
+                self.dictionary[key[:var_idx] + key[var_idx+1:]] = self.dictionary[key]
+            del(self.dictionary[key])
+
+        
+    def normalize(self):
+        """ Normalize the factor, make all entries sum to 1 """
+        total = sum(self.dictionary.values())
+        for k in self.dictionary:
+            self.dictionary[k] /= total
+
+
+
+
+
 def basicTest():
     # Factor class basic test
     test = Factor([2, 1], [3, 2])   # test __init__
@@ -351,7 +385,29 @@ def productTest():
     print(f2)
     print(f1*f2)
 
+
+def obsNormTest():
+    # test observe and normalize
+    f = DictionaryFactor([7, 8], [2, 3])
+    for i in range(6):
+        f[i] = i
+    print(f)
+    f.observe(8, 1)
+    print(f)
+    f.normalize()
+    print(f)
+
+    f = DictionaryFactor([2,6,4], [2,2,2])
+    for i in range(8):
+        f[i] = 1+i
+    print(f)
+    f.observe(6, 1)
+    print(f)
+    f.normalize()
+    print(f)
+
     
 if __name__ == "__main__":
-    #basicTest()
-    productTest()
+    # basicTest()
+    # productTest()
+    obsNormTest()
