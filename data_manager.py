@@ -7,6 +7,9 @@ from string import punctuation
 DATA_PATH = "data/"
 # the maximum length of a sentence
 MAX_LENGTH = 15
+BOS_ID = 30000
+EOS_ID = 30001
+UNK_ID = 30002
 
 def wordsToIds(words: str or list) -> torch.tensor:
     """
@@ -78,12 +81,12 @@ def getWordDict() -> dict:
     """
     with open(DATA_PATH + "quoradata/dict.pkl", "rb") as data_file:
         d = pkl.load(data_file, encoding = "utf-8")
-    d[0]["<BOS>"] = -1
-    d[0]["<EOS>"] = -2
-    d[0]["<UNK>"] = -3
-    d[1][-1] = "<BOS>"
-    d[1][-2] = "<EOS>"
-    d[1][-3] = "<UNK>"
+    d[0]["<BOS>"] = BOS_ID
+    d[0]["<EOS>"] = EOS_ID
+    d[0]["<UNK>"] = UNK_ID
+    d[1][BOS_ID] = "<BOS>"
+    d[1][EOS_ID] = "<EOS>"
+    d[1][UNK_ID] = "<UNK>"
     return d
 
 
