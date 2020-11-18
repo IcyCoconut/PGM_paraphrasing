@@ -46,6 +46,8 @@ class PartialModel():
                 DictionaryFactor([X[factor_idx], Y[pos - 1]], [n_vars, n_vars])
             )
 
+        self.c = 0.7
+
 
     def fillModel(self, data_loader):
         """
@@ -91,13 +93,16 @@ class PartialModel():
         for i in range(MAX_LENGTH):
             # observe ith word is ids[i]
             self.factor_list[i].observe(X[i], ids[i])
+            # distance is how far away this word is to the target word
+            # further distance may lead to less connection, so less weight
+            distance = abs(self.pos - (i+1))
             # iterate all possible words, if the word not in word choices then add it, if exists then update the value
             for k in self.factor_list[i].dictionary:
                 # k is the index for a word
                 if word_choices.get(k) == None:
-                    word_choices[k] = self.factor_list[i][k]
+                    word_choices[k] = distance * self.c * self.factor_list[i][k]
                 else:
-                    word_choices[k] += self.factor_list[i][k]
+                    word_choices[k] += distance * self.c * self.factor_list[i][k]
         
         # new word_choices should contain all possible word choices and their probability
         # for this position, we want the maximum one for now

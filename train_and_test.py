@@ -1,4 +1,4 @@
-from data_manager import Sentences
+from data_manager import Sentences, MAX_LENGTH
 import torch
 import model
 
@@ -28,20 +28,26 @@ def loadDataset():
 
 
 def buildModel():
-    model_1st = model.PartialModel(1)
-    model_1st.fillModel(loadDataset())
-    model.saveModel(model_1st)
+    loader = loadDataset()
+    for i in range(MAX_LENGTH):
+        print("Building model X -> y{}".format(i + 1))
+        part_model = model.PartialModel(i + 1)
+        part_model.fillModel(loader)
+        model.saveModel(part_model)
 
 
 def test():
     # now, only test for generating one word
-    sentence = input("enter a sentence: ")
-    model_1st = model.loadModel("pos1.pkl")
-    w, p = model_1st.getWord(sentence)
-    print(w, p)
+    sentence = "what can make math easy to learn" # input("enter a sentence: ")
+    for i in range(MAX_LENGTH):
+        part_model = model.loadModel("pos{}.pkl".format(i + 1))
+        w, p = part_model.getWord(sentence)
+        print(w[0], end = " ")
+    print()
 
 
 if __name__ == "__main__":
+    buildModel()
     test()
 
 
