@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+from time import time
 
 MAX_LINES = 10 # maximumly 10 lines are displayed when print a factor
 INT_DTYPE = torch.long # datatype for integer tensors
@@ -292,6 +293,13 @@ class DictionaryFactor():
         return result
 
 
+    def copy(self):
+        """ return a copy of self """
+        copy_of_self = DictionaryFactor(self.var.clone(), self.card.clone())
+        copy_of_self.dictionary = self.dictionary.copy()
+        return copy_of_self
+
+
     def indexToAssignment(self, index: int) -> tuple:
         """
         Convert an index of value to as assignment of variables
@@ -316,6 +324,7 @@ class DictionaryFactor():
         assignment is the observed value of this variable
         Example: factor.observe(1, 3) means variable 1 has assignment 3
         """
+        
         var_idx = torch.where(self.var == observed_var)[0]
 
         # if the original var is [1,2,3,4] and card is [2,3,2,3]
@@ -327,12 +336,46 @@ class DictionaryFactor():
         # then we observe variable 2 with value 1, we add a new entry [0, 0, 2] = 0.25
         # and delete the old one. If there is an entry [1, 0, 1, 2] = 0.13, we do not 
         # add any new entries, and directly remove this entry, becaue variable 2 is 0, not 1
-        keys = list(self.dictionary.keys())
-        for key in keys:
-            if key[var_idx] == assignment:
-                self.dictionary[key[:var_idx] + key[var_idx+1:]] = self.dictionary[key]
-            del(self.dictionary[key])
 
+        new_dict = dict()
+        for key in self.dictionary:
+            if key[var_idx] == assignment:
+                new_dict[key[:var_idx] + key[var_idx+1:]] = self.dictionary[key]
+                #new_dict[(key[0],)] = self.dictionary[key]
+        self.dictionary = new_dict
+
+
+    def fastObserve(self, assignment):
+        """
+        NOTE: this only work when where are exactly 2 variables
+        Observe the first variable with given value assignment
+        Returns a tensor in format:
+            [[word_idx, prob], [word_idx, prob], ...]
+            actually a single variable factor
+        Example:
+            f = DictionaryFactor([4,5], [2,2]) with values [1 2 3 4]
+            in table:
+                4   5   v
+                ---------
+                0   0   1
+                0   1   2
+                1   0   3
+                1   1   4
+            factor.observe(1) means variable 4 has assignment 1
+            result will be tensor([[0, 3], [1, 4]])
+        
+        This is the special designd version for this task
+        the speed is around 17.5 times faster than the observe function above
+        """
+        assignment = torch.tensor(assignment, dtype=torch.long)
+        keys = torch.tensor(list(self.dictionary.keys()), dtype = torch.long)
+        vals = torch.tensor(list(self.dictionary.values()))
+        remain_idx = torch.where(keys[:, 0] == assignment)[0]
+
+        # if the original var is [1,2] and card is [2,3]
+        # then the new var is [2] and card is [3]
+        result = torch.cat((keys[remain_idx, 1].view(1, -1), vals[remain_idx].view(1, -1)))
+        return result.view(-1, 2)
         
     def normalize(self):
         """ Normalize the factor, make all entries sum to 1 """
@@ -406,8 +449,24 @@ def obsNormTest():
     f.normalize()
     print(f)
 
+
+def designedObserveSpeedTest():
+    f1 = DictionaryFactor([2,3], [30000, 30000])
+    for i in range(30000):
+        f1[i] = i
+    print(f1)
+
+    start = time()
+    f2 = f1.fastObserve(1)
+    ckpt_1 = time()
+    #print(f2)
+    #print(dict(f2))
+    f1.observe(2, 1)
+    print("fast: {}\nslow: {}".format(ckpt_1 - start, time() - ckpt_1))
+
     
 if __name__ == "__main__":
     # basicTest()
     # productTest()
-    obsNormTest()
+    # obsNormTest()
+    designedObserveSpeedTest()

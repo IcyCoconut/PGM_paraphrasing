@@ -7,6 +7,9 @@ from string import punctuation
 DATA_PATH = "data/"
 # the maximum length of a sentence
 MAX_LENGTH = 15
+
+DATA_COUNT = 127940
+
 BOS_ID = 30000
 EOS_ID = 30001
 UNK_ID = 30002

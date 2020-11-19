@@ -2,6 +2,7 @@ from PGM_basics import DictionaryFactor
 from data_manager import *
 import pickle
 import torch
+from time import time
 
 # the variable index for x nodes and y nodes
 # the graph is like a fully connected bipartite graph
@@ -40,6 +41,10 @@ class PartialModel():
         """
         n_vars = len(getWordDict()[0])
         self.pos = pos
+
+        if self.pos != 1:
+            self.factor_this_prev = DictionaryFactor([Y[pos - 2], Y[pos - 1]], [n_vars, n_vars])
+
         self.factor_list = []
         for factor_idx in range(MAX_LENGTH):
             self.factor_list.append(
@@ -75,18 +80,102 @@ class PartialModel():
                 if input_word == EOS_ID:
                     break
                 self.factor_list[word_idx][(input_word, target_word)] += 1
+            
+            if self.pos > 1:
+                prev_target_word = int(target_sentence[self.pos - 1])
+                self.factor_this_prev[(prev_target_word, target_word)] += 1
 
             print("{}\t".format(count), end = "\r")
             count += 1
         print("\ndone")
 
 
-    def getWord(self, input_sentence):
+    def learn(self, data_loader):
+        
+        print("Prograss:", end = " ")
+        count = 0
+        for sample in data_loader:
+            # load a pair of data
+            input_sentence = sample["input"][0]
+            target_sentence = sample["target"][0]
+
+            # get target word and previous target word
+            target_word = int(target_sentence[self.pos])
+            prev_word = None if self.pos <= 1 else int(target_sentence[self.pos - 1])
+
+            # use this model to generate an output word
+            output_word = self.getWord(input_sentence[1:-1], prev_word)
+
+            # if the output word is not target word
+            # then P(target word | input word) shoud increase
+            # ans P(output word | input word) should drcrease
+            # for all factors
+            if output_word != target_word:
+                for i in range(MAX_LENGTH):
+                    input_word = int(input_sentence[i + 1])
+                    self.factor_list[i][(input_word, output_word)] -= 1
+                    self.factor_list[i][(input_word, target_word)] += 1
+
+                if self.pos > 1:
+                    self.factor_this_prev[(prev_word, output_word)] -= 1
+                    self.factor_this_prev[(prev_word, target_word)] += 1
+
+            print("{}/{}\t".format(count,DATA_COUNT), end = "\r")
+            count += 1
+
+
+    def getWord(self, input_sentence, prev_word = None):
         """
-        input_sentence is a sentence! It should be a string or list of words, not indicies of words
+        input_sentence is a list of ids!
+        prev_word is the previous word (in index form)
         given the input sentence, the function choose and return a word, with its occurances
         """
 
+        ids = input_sentence
+        # word_choices in format: {word_index : probability}
+        word_choices = dict()
+        total = 0
+        for i in range(MAX_LENGTH):
+            # observe ith word is ids[i]
+            # words_probs is a tensor in format:
+            # [[word_id_1, word_id_2, word_id_3, ...
+            #   prob_1   , prob_2,    prob_3   , ...]]
+            words_probs = self.factor_list[i].fastObserve(ids[i])
+            # distance is how far away this word is to the target word
+            # further distance may lead to less connection, so less weight
+            distance = abs(self.pos - (i+1))
+            # iterate all possible words, if the word not in word choices then add it, if exists then update the value
+            for w, p in words_probs:
+                # k is the index for a word
+                w = int(w)
+                if not torch.is_tensor(word_choices.get(w)):
+                    word_choices[w] = distance * self.c * p
+                else:
+                    word_choices[w] += distance * self.c * p
+
+        # given the previous word (observed), get the probability of this word
+        if self.pos > 1 and prev_word != None:
+            start = time()
+            words_probs = self.factor_this_prev.fastObserve(prev_word)
+            total += time() - start
+            for w, p in words_probs:
+                w = int(w)
+                if w in word_choices:
+                    word_choices[w] += p
+        # new word_choices should contain all possible word choices and their probability
+        # for this position, we want the maximum one for now
+        max_k = list(word_choices.keys())[0]
+        for k in word_choices:
+            if word_choices[k] > word_choices[max_k]:
+                max_k = k
+        
+        return max_k
+
+
+    def getWords(self, input_sentence, num, prev_word = None):
+        """
+        Similar to getWord, but this returns num words, all of them are possible choices
+        """
         ids = wordsToIds(input_sentence)
         # word_choices in format: {word_index : probability}
         word_choices = dict()
@@ -100,17 +189,21 @@ class PartialModel():
             for k in self.factor_list[i].dictionary:
                 # k is the index for a word
                 if word_choices.get(k) == None:
-                    word_choices[k] = distance * self.c * self.factor_list[i][k]
+                    word_choices[k] = self.c ** distance * self.factor_list[i][k]
                 else:
-                    word_choices[k] += distance * self.c * self.factor_list[i][k]
+                    word_choices[k] += self.c ** distance * self.factor_list[i][k]
+
+        # given the previous word (observed), get the probability of this word
+        if self.pos > 1 and prev_word != None:
+            self.factor_this_prev.observe(Y[self.pos - 2], prev_word)
+            for wc in word_choices:
+                if wc in self.factor_this_prev.dictionary:
+                    word_choices[wc] += self.factor_this_prev[wc]
         
         # new word_choices should contain all possible word choices and their probability
         # for this position, we want the maximum one for now
-        max_k = list(word_choices.keys())[0]
-        for k in word_choices:
-            if word_choices[k] > word_choices[max_k]:
-                max_k = k
+        best_choices = sorted(word_choices, key = lambda x : word_choices[x], reverse = True)
         
-        return idsToWords(list(max_k)), word_choices[max_k]
+        return [x[0] for x in best_choices[:num]]
 
 

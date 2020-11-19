@@ -36,18 +36,30 @@ def buildModel():
         model.saveModel(part_model)
 
 
+def learnModel():
+    loader = loadDataset()
+    for i in range(MAX_LENGTH):
+        print("Learning model X -> y{}".format(i + 1))
+        part_model = model.loadModel("pos{}.pkl".format(i + 1))
+        part_model.learn(loader)
+        model.saveModel(part_model)
+
+
 def test():
     # now, only test for generating one word
-    sentence = "what can make math easy to learn" # input("enter a sentence: ")
+    sentence = "what can make physics easy to learn" # input("enter a sentence: ")
+    sentence = "i want to sleep"
+    prev_word = None
     for i in range(MAX_LENGTH):
         part_model = model.loadModel("pos{}.pkl".format(i + 1))
-        w, p = part_model.getWord(sentence)
-        print(w[0], end = " ")
-    print()
+        w = part_model.getWord(sentence, prev_word)
+        prev_word = w
+        print(w)
 
 
 if __name__ == "__main__":
-    buildModel()
-    test()
+    # buildModel()
+    learnModel()
+    # test()
 
 
