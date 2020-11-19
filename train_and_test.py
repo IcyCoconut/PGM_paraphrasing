@@ -61,20 +61,20 @@ def learnModel():
 
 def test():
     sentence = "what can make physics easy to learn" # input("enter a sentence: ")
-    sentence = wordsToIds("i want to sleep")[1:-1]
+    sentence = wordsToIds("what can make maths easy to learn")[1:-1]
     print(sentence)
     prev_word = None
     for i in range(MAX_LENGTH):
         part_model = model.loadModel("pos{}.pkl".format(i + 1))
-        #w = part_model.getWord(sentence, prev_word)
-        w_fast = part_model.getWordFast(sentence, prev_word)
-        prev_word = w_fast
-        print(idsToWords([w_fast]))
+        w = part_model.getWord(sentence, prev_word)
+        #w = part_model.getWordFast(sentence.to("cuda"), prev_word)
+        prev_word = w
+        print(idsToWords([w]))
 
 
 if __name__ == "__main__":
     # buildModel()
-    learnModel()
-    # test()
+    # learnModel()
+    test()
 
 

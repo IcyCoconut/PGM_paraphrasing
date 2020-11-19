@@ -2,6 +2,7 @@ from PGM_basics import DictionaryFactor
 from data_manager import *
 import pickle
 import torch
+import sys
 from time import time
 
 # the variable index for x nodes and y nodes
@@ -28,6 +29,7 @@ def loadModel(file_name):
     """ given a file anme, load and return the corresponding model from the given file """
     with open(SAVE_PATH + file_name, "rb") as in_file:
         model = pickle.load(in_file, encoding = "uft-8")
+    print("{} loaded".format(file_name))
     return model
 
 
@@ -94,6 +96,15 @@ class PartialModel():
         print("\ndone")
 
 
+    def learnTestMode(self):
+        for i in range(MAX_LENGTH):
+            print(self.factor_list[i].getNonZeroEntryCount())
+            self.factor_list[i].learnMode()
+
+        if self.pos > 1:
+            self.factor_this_prev.learnMode()
+
+
     def learn(self, data_loader):
         # start = time()
         # part_time = 0
@@ -102,11 +113,7 @@ class PartialModel():
         count = 0
         tens_thousand = 0
 
-        for i in range(MAX_LENGTH):
-            self.factor_list[i].learnMode()
-
-        if self.pos > 1:
-            self.factor_this_prev.learnMode()
+        self.learnTestMode()
 
         for sample_batch in data_loader:
             sample_batch["input"] = sample_batch["input"].to("cuda")
@@ -161,38 +168,32 @@ class PartialModel():
         ids = input_sentence
         # word_choices in format: {word_index : probability}
         word_choices = dict()
-        total = 0
         for i in range(MAX_LENGTH):
             # observe ith word is ids[i]
             # words_probs is a tensor in format:
             # [[word_id_1, word_id_2, word_id_3, ...
             #   prob_1   , prob_2,    prob_3   , ...]]
-            start = time()
-            words_probs = self.factor_list[i].fastObserve(ids[i])
-            total += time() - start
+            temp_factor = self.factor_list[i].copy()
+            temp_factor.observe(X[i], ids[i])
+
             # distance is how far away this word is to the target word
             # further distance may lead to less connection, so less weight
             distance = abs(self.pos - (i+1))
             # iterate all possible words, if the word not in word choices then add it, if exists then update the value
-            for w, p in words_probs:
+            for k in temp_factor.dictionary:
                 # k is the index for a word
-                w = int(w)
-                if not torch.is_tensor(word_choices.get(w)):
-                    word_choices[w] = self.c ** distance * p
+                if word_choices.get(k) == None:
+                    word_choices[k] = self.c ** distance * self.factor_list[i][k]
                 else:
-                    word_choices[w] += self.c ** distance * p
-        print(total)
+                    word_choices[k] += self.c ** distance * self.factor_list[i][k]
 
         # given the previous word (observed), get the probability of this word
         if self.pos > 1 and prev_word != None:
-            self.factor_this_prev.learnMode()
-            start = time()
-            words_probs = self.factor_this_prev.fastObserve(prev_word)
-            total += time() - start
-            for w, p in words_probs:
-                w = int(w)
-                if w in word_choices:
-                    word_choices[w] += p
+            temp_factor = self.factor_this_prev.copy()
+            temp_factor.observe(Y[self.pos - 2], prev_word)
+            for wc in word_choices:
+                if wc in self.factor_this_prev.dictionary:
+                    word_choices[wc] += self.factor_this_prev[wc]
         # new word_choices should contain all possible word choices and their probability
         # for this position, we want the maximum one for now
         max_k = list(word_choices.keys())[0]
@@ -200,7 +201,7 @@ class PartialModel():
             if word_choices[k] > word_choices[max_k]:
                 max_k = k
         
-        return max_k
+        return max_k[0]
 
 
     def getWordFast(self, input_sentence, prev_word = None):
@@ -228,7 +229,7 @@ class PartialModel():
         #print(total)
 
         # given the previous word (observed), get the probability of this word
-        if self.pos > 1 and prev_word != None:
+        if self.pos > 1 and torch.is_tensor(prev_word):
             words, probs = self.factor_this_prev.fastObserve(prev_word)
             if words.size(0) != 0:
                 word_choices[words] += probs
@@ -263,7 +264,7 @@ class PartialModel():
             self.factor_this_prev.observe(Y[self.pos - 2], prev_word)
             for wc in word_choices:
                 if wc in self.factor_this_prev.dictionary:
-                    word_choices[wc] += self.factor_this_prev[wc]
+                    word_choices[wc] += 0 * self.factor_this_prev[wc]
         
         # new word_choices should contain all possible word choices and their probability
         # for this position, we want the maximum one for now

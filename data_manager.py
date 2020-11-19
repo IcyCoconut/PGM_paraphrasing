@@ -28,7 +28,7 @@ def wordsToIds(words: str or list) -> torch.tensor:
 
     # we need to add <BOS> and <EOS>, so actually the sequence has length 17
     # initialize the indecies too all <EOS>
-    ids = torch.ones(MAX_LENGTH + 2, dtype = torch.int32) * dictionary[0]["<EOS>"]
+    ids = torch.ones(MAX_LENGTH + 2, dtype = torch.long) * dictionary[0]["<EOS>"]
     ids[0] = dictionary[0]["<BOS>"]
 
     # the first one is <BOS>, so the 1st element should be ids[i + 1]
