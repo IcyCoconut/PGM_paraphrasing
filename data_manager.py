@@ -51,7 +51,7 @@ def sentencesToIds(sentences: list) -> torch.tensor:
     # punctuations is converted to spaces
     trans_table = str.maketrans(punctuation, " "*len(punctuation), "")
     # initialize all element to <EOS>
-    ids = torch.ones((n_sentences, MAX_LENGTH + 2), dtype = torch.int32) * dictionary[0]["<EOS>"]
+    ids = torch.ones((n_sentences, MAX_LENGTH + 2), dtype = torch.long) * dictionary[0]["<EOS>"]
     # column index 0 should be all <BOS>
     ids[:, 0] = dictionary[0]["<BOS>"]
 

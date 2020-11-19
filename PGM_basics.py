@@ -367,16 +367,16 @@ class DictionaryFactor():
         This is the special designd version for this task
         the speed is around 17.5 times faster than the observe function above
         """
-        assignment = torch.tensor(assignment, dtype=torch.long)
-        keys = torch.tensor(list(self.dictionary.keys()), dtype = torch.long)
-        vals = torch.tensor(list(self.dictionary.values()))
-        remain_idx = torch.where(keys[:, 0] == assignment)[0]
+        #assignment = torch.tensor(assignment, dtype=torch.long)
+        remain_idx = torch.where(self.keys[:, 0] == assignment)[0]
 
         # if the original var is [1,2] and card is [2,3]
         # then the new var is [2] and card is [3]
-        result = torch.cat((keys[remain_idx, 1].view(1, -1), vals[remain_idx].view(1, -1)))
-        return result.view(-1, 2)
+        # result = torch.cat((self.keys[remain_idx, 1].view(1, -1), 
+        #     self.vals[remain_idx].view(1, -1)))
+        return self.keys[remain_idx, 1], self.vals[remain_idx]
         
+
     def normalize(self):
         """ Normalize the factor, make all entries sum to 1 """
         total = sum(self.dictionary.values())
@@ -384,7 +384,9 @@ class DictionaryFactor():
             self.dictionary[k] /= total
 
 
-
+    def learnMode(self):
+        self.keys = torch.tensor(list(self.dictionary.keys()), dtype = torch.long).to("cuda")
+        self.vals = torch.tensor(list(self.dictionary.values()), dtype = torch.float).to("cuda")
 
 
 def basicTest():
@@ -456,6 +458,8 @@ def designedObserveSpeedTest():
         f1[i] = i
     print(f1)
 
+    
+    f1.learnMode()
     start = time()
     f2 = f1.fastObserve(1)
     ckpt_1 = time()

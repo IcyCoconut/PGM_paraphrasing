@@ -16,6 +16,10 @@ SAVE_PATH = "model/"
 def saveModel(model):
     """ given a model, save it as a pkl file """
     with open(SAVE_PATH + "pos{}.pkl".format(model.pos), "wb") as out_file:
+        # wo do not want to save redundant data, so keys and vals are excluded
+        if hasattr(model, "keys"):
+            del(model.keys)
+            del(model.vals)
         pickle.dump(model, out_file)
     print("model save to", SAVE_PATH + "pos{}.pkl".format(model.pos))
 
@@ -91,37 +95,60 @@ class PartialModel():
 
 
     def learn(self, data_loader):
+        # start = time()
+        # part_time = 0
         
-        print("Prograss:", end = " ")
+        print("Prograss:")
         count = 0
-        for sample in data_loader:
-            # load a pair of data
-            input_sentence = sample["input"][0]
-            target_sentence = sample["target"][0]
+        tens_thousand = 0
 
-            # get target word and previous target word
-            target_word = int(target_sentence[self.pos])
-            prev_word = None if self.pos <= 1 else int(target_sentence[self.pos - 1])
+        for i in range(MAX_LENGTH):
+            self.factor_list[i].learnMode()
 
-            # use this model to generate an output word
-            output_word = self.getWord(input_sentence[1:-1], prev_word)
+        if self.pos > 1:
+            self.factor_this_prev.learnMode()
 
-            # if the output word is not target word
-            # then P(target word | input word) shoud increase
-            # ans P(output word | input word) should drcrease
-            # for all factors
-            if output_word != target_word:
-                for i in range(MAX_LENGTH):
-                    input_word = int(input_sentence[i + 1])
-                    self.factor_list[i][(input_word, output_word)] -= 1
-                    self.factor_list[i][(input_word, target_word)] += 1
+        for sample_batch in data_loader:
+            sample_batch["input"] = sample_batch["input"].to("cuda")
+            # 10 items in a batch
+            for i in range(10):
+                # load a pair of data
+                input_sentence = sample_batch["input"][i]
+                target_sentence = sample_batch["target"][i]
 
-                if self.pos > 1:
-                    self.factor_this_prev[(prev_word, output_word)] -= 1
-                    self.factor_this_prev[(prev_word, target_word)] += 1
+                # get target word and previous target word
+                target_word = int(target_sentence[self.pos])
+                prev_word = None if self.pos <= 1 else int(target_sentence[self.pos - 1])
 
-            print("{}/{}\t".format(count,DATA_COUNT), end = "\r")
-            count += 1
+                # if count == tens_thousand:
+                #     for i in range(MAX_LENGTH):
+                #         self.factor_list[i].learnMode()
+                #     if self.pos > 1:
+                #         self.factor_this_prev.learnMode()
+                #     tens_thousand += 10000
+
+                # use this model to generate an output word
+                # part_start = time()
+                output_word = self.getWordFast(input_sentence[1:-1], prev_word)
+                # part_time += time() - part_start
+
+                # if the output word is not target word
+                # then P(target word | input word) shoud increase
+                # ans P(output word | input word) should drcrease
+                # for all factors
+                if output_word != target_word:
+                    for i in range(MAX_LENGTH):
+                        input_word = int(input_sentence[i + 1])
+                        self.factor_list[i][(input_word, output_word)] -= 1
+                        self.factor_list[i][(input_word, target_word)] += 1
+
+                    if self.pos > 1:
+                        self.factor_this_prev[(prev_word, output_word)] -= 1
+                        self.factor_this_prev[(prev_word, target_word)] += 1
+
+                #print("total time: {:.5f}, getWord time: {:.5f}".format(time() - start, part_time))
+                print("{}/{}\t".format(count,DATA_COUNT), end = "\r")
+                count += 1
 
 
     def getWord(self, input_sentence, prev_word = None):
@@ -140,7 +167,9 @@ class PartialModel():
             # words_probs is a tensor in format:
             # [[word_id_1, word_id_2, word_id_3, ...
             #   prob_1   , prob_2,    prob_3   , ...]]
+            start = time()
             words_probs = self.factor_list[i].fastObserve(ids[i])
+            total += time() - start
             # distance is how far away this word is to the target word
             # further distance may lead to less connection, so less weight
             distance = abs(self.pos - (i+1))
@@ -149,12 +178,14 @@ class PartialModel():
                 # k is the index for a word
                 w = int(w)
                 if not torch.is_tensor(word_choices.get(w)):
-                    word_choices[w] = distance * self.c * p
+                    word_choices[w] = self.c ** distance * p
                 else:
-                    word_choices[w] += distance * self.c * p
+                    word_choices[w] += self.c ** distance * p
+        print(total)
 
         # given the previous word (observed), get the probability of this word
         if self.pos > 1 and prev_word != None:
+            self.factor_this_prev.learnMode()
             start = time()
             words_probs = self.factor_this_prev.fastObserve(prev_word)
             total += time() - start
@@ -170,6 +201,40 @@ class PartialModel():
                 max_k = k
         
         return max_k
+
+
+    def getWordFast(self, input_sentence, prev_word = None):
+        """
+        Make use of pytorch
+        """
+        # word_choices is a tensor: wor_choices[word_index] = probability of word
+        word_choices = torch.zeros(30003, device="cuda")
+        #total = 0
+        for i in range(MAX_LENGTH):
+            # observe ith word is ids[i]
+            # words_probs is a tensor in format:
+            # [[word_id_1, word_id_2, word_id_3, ...
+            #   prob_1   , prob_2,    prob_3   , ...]]
+            #start = time()
+            words, probs = self.factor_list[i].fastObserve(input_sentence[i])
+            #total += time() - start
+            # distance is how far away this word is to the target word
+            # further distance may lead to less connection, so less weight
+            distance = abs(self.pos - (i+1))
+            # iterate all possible words, if the word not in word choices then add it, if exists then update the value
+            if words.size(0) == 0:
+                continue
+            word_choices[words] += self.c ** distance * probs
+        #print(total)
+
+        # given the previous word (observed), get the probability of this word
+        if self.pos > 1 and prev_word != None:
+            words, probs = self.factor_this_prev.fastObserve(prev_word)
+            if words.size(0) != 0:
+                word_choices[words] += probs
+        # new word_choices should contain all possible word choices and their probability
+        # for this position, we want the maximum one for now
+        return torch.argmax(word_choices)
 
 
     def getWords(self, input_sentence, num, prev_word = None):
