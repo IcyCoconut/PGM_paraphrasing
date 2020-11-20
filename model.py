@@ -1,4 +1,4 @@
-from PGM_basics import DictionaryFactor
+from PGM_basics import DictionaryFactor, HmmFactor
 from data_manager import *
 import pickle
 import torch
@@ -48,8 +48,8 @@ class PartialModel():
         n_vars = len(getWordDict()[0])
         self.pos = pos
 
-        if self.pos != 1:
-            self.factor_this_prev = DictionaryFactor([Y[pos - 2], Y[pos - 1]], [n_vars, n_vars])
+        # if self.pos != 1:
+        #     self.factor_this_prev = DictionaryFactor([Y[pos - 2], Y[pos - 1]], [n_vars, n_vars])
 
         self.factor_list = []
         for factor_idx in range(MAX_LENGTH):
@@ -57,7 +57,7 @@ class PartialModel():
                 DictionaryFactor([X[factor_idx], Y[pos - 1]], [n_vars, n_vars])
             )
 
-        self.c = 0.7
+        self.c = 0.1
 
 
     def fillModel(self, data_loader):
@@ -87,9 +87,9 @@ class PartialModel():
                     break
                 self.factor_list[word_idx][(input_word, target_word)] += 1
             
-            if self.pos > 1:
-                prev_target_word = int(target_sentence[self.pos - 1])
-                self.factor_this_prev[(prev_target_word, target_word)] += 1
+            # if self.pos > 1:
+            #     prev_target_word = int(target_sentence[self.pos - 1])
+            #     self.factor_this_prev[(prev_target_word, target_word)] += 1
 
             print("{}\t".format(count), end = "\r")
             count += 1
@@ -188,12 +188,12 @@ class PartialModel():
                     word_choices[k] += self.c ** distance * self.factor_list[i][k]
 
         # given the previous word (observed), get the probability of this word
-        if self.pos > 1 and prev_word != None:
-            temp_factor = self.factor_this_prev.copy()
-            temp_factor.observe(Y[self.pos - 2], prev_word)
-            for wc in word_choices:
-                if wc in self.factor_this_prev.dictionary:
-                    word_choices[wc] += self.factor_this_prev[wc]
+        # if self.pos > 1 and prev_word != None:
+        #     temp_factor = self.factor_this_prev.copy()
+        #     temp_factor.observe(Y[self.pos - 2], prev_word)
+        #     for wc in word_choices:
+        #         if wc in self.factor_this_prev.dictionary:
+        #             word_choices[wc] += 0 * self.factor_this_prev[wc]
         # new word_choices should contain all possible word choices and their probability
         # for this position, we want the maximum one for now
         max_k = list(word_choices.keys())[0]
@@ -273,3 +273,93 @@ class PartialModel():
         return [x[0] for x in best_choices[:num]]
 
 
+class HiddenMarkovModel():
+    def __init__(self):
+        # 15 emission factors phi(oi, wi)
+        self.emiss_factors = []
+        for i in range(15):
+            self.emiss_factors.append(HmmFactor())
+
+        # transition factors phi(wi, wi-1)
+        self.trans_factors = []
+        for i in range(14):
+            self.trans_factors.append(HmmFactor())
+
+
+    def learnDataset(self, data_loader):
+        """
+        Say we have 1,000,000 sentence pairs, each sentence has length 15 
+        If factor is (o3, w3), then
+            all_words_1 are 1,000,000 words at position 3 of every ground truth sentence
+            all_words_2 are 1,000,000 words at position 3 of every input sentence
+        """
+
+        print("learning dataset")
+        # we have 127940 sentences in total
+        count = 0
+        for sample in data_loader:
+            input_sentence = sample["input"][0]
+            target_sentence = sample["target"][0]
+
+            # NOTE: target_word & input_word are actually indecies of words, instead of word strings
+            # NOTE: the first word has index 1
+            first_target = int(target_sentence[1])
+            first_input = int(input_sentence[1])
+
+            self.emiss_factors[0][(first_input, first_target)] += 1
+
+            prev_target = first_target
+            for word_idx in range(2, 16):
+                # note that word_idx is 0 is always <BOS>
+                target_word = int(target_sentence[word_idx])
+                input_word = int(input_sentence[word_idx])
+
+                self.emiss_factors[word_idx - 1][(input_word, target_word)] += 1
+                self.trans_factors[word_idx - 2][(prev_target, target_word)] += 1
+                prev_target = target_word
+
+            print("{}/127940".format(count), end = "\r")
+            count += 1
+        print("127940/127940")
+
+        # all data updated, no need to do any insertion
+        for i in range(15):
+            self.emiss_factors[i].fixed()
+        for i in range(14):
+            self.trans_factors[i].fixed()
+
+
+    def getOutput(self, input_sentence):
+        """
+        input sentence is a list of ids, return an output sentence (ids)
+        NOTE: the input sentence here should not have <BOS> sign at beginning
+        """
+
+        output = torch.ones(15) * EOS_ID
+
+        for i in range(15):
+            observe_word = input_sentence[i]
+
+            words, probs = self.emiss_factors[i].observe(observe_word)
+
+            if i > 1:
+                trans_words, trans_probs = self.trans_factors[i-1].observe(observe_word)
+
+                words, idx = torch.unique(torch.cat((words, trans_words)), return_inverse = True)
+                concat_probs = torch.cat((probs, trans_probs))
+                new_probs = torch.zeros_like(words)
+                for j in range(concat_probs.size(0)):
+                    new_probs[idx[j]] = concat_probs[j]
+                probs = new_probs
+
+            try:
+                chosen_idx = torch.argmax(probs)
+                output[i] = words[chosen_idx]
+            except:
+                output[i] = input_sentence[i]
+
+        for i in range(15):
+            if output[i] == UNK_ID:
+                output[i] = input_sentence[i]
+
+        return output

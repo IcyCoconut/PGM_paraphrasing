@@ -1,7 +1,9 @@
 from data_manager import Sentences, MAX_LENGTH, idsToWords, wordsToIds
 import torch
 import model
+import pickle
 from datetime import datetime
+import evaluate as eva
 
 # We can divide model into different parts (actually 15 parts)
 # Let input words be X = {x1, x2, x3, ... x15}
@@ -16,9 +18,9 @@ from datetime import datetime
 # Let's say, P(y1 = "she" | X) is the greatest, then the first word should be "she"
 
 
-def loadDataset(bs = 1):
+def loadDataset(bs = 1, set_name = "train"):
     """ load and return dataloader """
-    train_set = Sentences("train")
+    train_set = Sentences(set_name)
     loader = torch.utils.data.DataLoader(
         train_set, 
         batch_size = bs, 
@@ -60,8 +62,8 @@ def learnModel():
 
 
 def test():
-    sentence = "what can make physics easy to learn" # input("enter a sentence: ")
-    sentence = wordsToIds("what can make maths easy to learn")[1:-1]
+    # sentence = "what can make physics easy to learn" # input("enter a sentence: ")
+    sentence = wordsToIds("how can i gain weight on my body")[1:-1]
     print(sentence)
     prev_word = None
     for i in range(MAX_LENGTH):
@@ -69,12 +71,56 @@ def test():
         w = part_model.getWord(sentence, prev_word)
         #w = part_model.getWordFast(sentence.to("cuda"), prev_word)
         prev_word = w
+        if w == 30001:
+            break
         print(idsToWords([w]))
 
+
+def hmm_train_save():
+    m = model.HiddenMarkovModel()
+    loader = loadDataset()
+    m.learnDataset(loader)
+    sentence = wordsToIds("what is your name")[1:-1]
+    print(idsToWords(sentence))
+    output = m.getOutput(sentence)
+    print(idsToWords(output))
+    with open("model/hmm.pkl", "wb") as out_file:
+        pickle.dump(m, out_file)
+
+
+def test_hmm():
+    m = model.loadModel("hmm.pkl")
+    sentence = wordsToIds("what is your name")[1:-1]
+    print(idsToWords(sentence))
+    output = m.getOutput(sentence)
+    print(idsToWords(output))
+
+    loader = loadDataset(set_name = "test")
+
+    with open("data/testdata/result.txt", "a") as result_file:
+        c = 0
+        for sample in loader:
+            if c > 3767:
+                input_sentence = sample["input"][0][1:-1]
+                #target_sentence = sample["target"][0]
+
+                output = idsToWords(m.getOutput(input_sentence))
+                
+                try:
+                    last_index = output.index("<EOS>")
+                    line = " ".join(output[:last_index]) + "\n"
+                except:
+                    line = " ".join(output) + "\n"
+                result_file.write(line)
+
+            print(c, end = "\r")
+            c += 1
 
 if __name__ == "__main__":
     # buildModel()
     # learnModel()
-    test()
+    # test()
+    # hmm_train_save()
+    test_hmm()
 
 

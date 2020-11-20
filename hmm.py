@@ -65,8 +65,9 @@ def _get_init_model(sequences):
             else:
                 _count_two_dim(pre_state, state, state_trans_count)
             pre_state = state
-        print(count, end = "\r\n")
-        count += 1
+            print("{}/2174979".format(count), end = "\r")
+            count += 1
+        print()
 
     return Model(state_count.keys(), symbol_count.keys(),
         state_start_count, state_trans_count, state_symbol_count)
@@ -198,9 +199,11 @@ class Model(object):
             return []
 
         alpha = [{}]
+        print("traverse state")
         for state in self._states:
             alpha[0][state] = self.start_prob(state) * self.emit_prob(state, sequence[0])
 
+        print("forward")
         for index in range(1, sequence_length):
             alpha.append({})
             for state_to in self._states:
@@ -209,6 +212,8 @@ class Model(object):
                     prob += alpha[index - 1][state_from] * \
                         self.trans_prob(state_from, state_to)
                 alpha[index][state_to] = prob * self.emit_prob(state_to, sequence[index])
+            print("{}/{}".format(index, sequence_length), end = "\r")
+        print()
 
         return alpha
 
@@ -239,6 +244,7 @@ class Model(object):
         <http://en.wikipedia.org/wiki/Forward%E2%80%93backward_algorithm>`_
         to evaluate the given sequence.
         """
+        print("evaluating")
         length = len(sequence)
         if length == 0:
             return 0

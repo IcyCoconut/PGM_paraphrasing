@@ -385,8 +385,60 @@ class DictionaryFactor():
 
 
     def learnMode(self):
-        self.keys = torch.tensor(list(self.dictionary.keys()), dtype = torch.long).to("cuda")
-        self.vals = torch.tensor(list(self.dictionary.values()), dtype = torch.float).to("cuda")
+        self.keys = torch.tensor(list(self.dictionary.keys()), dtype = INT_DTYPE).to("cuda")
+        self.vals = torch.tensor(list(self.dictionary.values()), dtype = FLOAT_DTYPE).to("cuda")
+
+
+
+class HmmFactor():
+    def __init__(self):
+        # format in (word1, word2) : probability
+        self.d = dict()
+        self.is_fixed = False
+        #self.words = torch.zeros(0,2)
+        #self.probs = torch.zeros(0)
+
+    def __setitem__(self, key, val):
+        """
+        key is a tuple of 2 int (word 1 index, word 2 index) 
+        val is float tensor
+        """
+        if not self.is_fixed:
+            self.d[key] = val
+
+    
+    def __getitem__(self, key):
+        """
+        key is a tuple of 2 int (word 1 index, word 2 index)
+        """
+        val = self.d.get(key)
+        if not torch.is_tensor(val):
+            return torch.tensor(0)
+        else:
+            return val
+
+
+    def fixed(self):
+        """
+        When the probabilities are all fixed (dataset learnt), call this function
+        The dictionary is converted to 2 tensors, this makes searching faster, but you cannot get or set items, you can now only observe
+        """
+        self.keys = torch.tensor(list(self.d.keys()), dtype = torch.long)
+        self.vals = torch.tensor(list(self.d.values()), dtype = torch.float)
+        self.is_fixed = True
+        del(self.d)
+
+
+    def observe(self, observe_val):
+        """ Returns a tensor in format:
+            [[word_idx, prob], [word_idx, prob], ...] """
+        remain_idx = torch.where(self.keys[:, 0] == observe_val)[0]
+        return self.keys[remain_idx, 1], self._normalize(self.vals[remain_idx])
+
+    def _normalize(self, part_vals):
+        """ normalize all values to 0 - 100 interval """
+        part_vals = part_vals / (torch.sum(part_vals) * 100)
+        return part_vals
 
 
 def basicTest():
@@ -473,4 +525,5 @@ if __name__ == "__main__":
     # basicTest()
     # productTest()
     # obsNormTest()
-    designedObserveSpeedTest()
+    # designedObserveSpeedTest()
+    pass

@@ -114,8 +114,8 @@ class Sentences(torch.utils.data.Dataset):
             self.input_path = DATA_PATH + "quoradata/val_pair.txt"
             self.target_path = DATA_PATH + "quoradata/val_label_pair.txt"
         else:
-            self.input_path = DATA_PATH + "quoradata/test_pair.txt"
-            self.target_path = DATA_PATH + "quoradata/test_label_pair.txt"
+            self.input_path = DATA_PATH + "testdata/c_origin.txt"
+            self.target_path = DATA_PATH + "testdata/reference.txt"
 
         self._loadDataAsIds()
         self.transform = transform
