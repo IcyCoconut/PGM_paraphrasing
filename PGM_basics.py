@@ -6,6 +6,63 @@ MAX_LINES = 10 # maximumly 10 lines are displayed when print a factor
 INT_DTYPE = torch.long # datatype for integer tensors
 FLOAT_DTYPE = torch.float64 # datatype for float tensors
 
+
+### THIS IS PROBABILY THE ONLY USEFUL CLASS IN THIS FILE ###
+### IT IS SPECIALLY DESIGNED FOR THIS PROJECT ###
+class HmmFactor():
+    def __init__(self):
+        # format in (word1, word2) : probability
+        self.d = dict()
+        self.is_fixed = False
+        #self.words = torch.zeros(0,2)
+        #self.probs = torch.zeros(0)
+
+    def __setitem__(self, key, val):
+        """
+        key is a tuple of 2 int (word 1 index, word 2 index) 
+        val is float tensor
+        """
+        if not self.is_fixed:
+            self.d[key] = val
+
+    
+    def __getitem__(self, key):
+        """
+        key is a tuple of 2 int (word 1 index, word 2 index)
+        """
+        val = self.d.get(key)
+        if not torch.is_tensor(val):
+            return torch.tensor(0)
+        else:
+            return val
+
+
+    def fixed(self):
+        """
+        When the probabilities are all fixed (dataset learnt), call this function
+        The dictionary is converted to 2 tensors, this makes searching faster, but you cannot get or set items, you can now only observe
+        """
+        self.keys = torch.tensor(list(self.d.keys()), dtype = torch.long)
+        self.vals = torch.tensor(list(self.d.values()), dtype = torch.float)
+        self.is_fixed = True
+        del(self.d)
+
+
+    def observe(self, observe_val):
+        """ Returns a tensor in format:
+            [[word_idx, prob], [word_idx, prob], ...] """
+        remain_idx = torch.where(self.keys[:, 0] == observe_val)[0]
+        return self.keys[remain_idx, 1], self._normalize(self.vals[remain_idx])
+
+
+    def _normalize(self, part_vals):
+        """ normalize all values to 0 - 100 interval """
+        part_vals = part_vals / (torch.sum(part_vals) * 100)
+        return part_vals
+
+
+
+### NOT USEFUL ###
 class Factor():
     """
     This factor stores entries using a table
@@ -170,6 +227,7 @@ class Factor():
 
 
 
+### NOT USEFUL ###
 class DictionaryFactor():
     """
     This factor design uses a dictionary to store assignments:values pairs
@@ -390,56 +448,7 @@ class DictionaryFactor():
 
 
 
-class HmmFactor():
-    def __init__(self):
-        # format in (word1, word2) : probability
-        self.d = dict()
-        self.is_fixed = False
-        #self.words = torch.zeros(0,2)
-        #self.probs = torch.zeros(0)
-
-    def __setitem__(self, key, val):
-        """
-        key is a tuple of 2 int (word 1 index, word 2 index) 
-        val is float tensor
-        """
-        if not self.is_fixed:
-            self.d[key] = val
-
-    
-    def __getitem__(self, key):
-        """
-        key is a tuple of 2 int (word 1 index, word 2 index)
-        """
-        val = self.d.get(key)
-        if not torch.is_tensor(val):
-            return torch.tensor(0)
-        else:
-            return val
-
-
-    def fixed(self):
-        """
-        When the probabilities are all fixed (dataset learnt), call this function
-        The dictionary is converted to 2 tensors, this makes searching faster, but you cannot get or set items, you can now only observe
-        """
-        self.keys = torch.tensor(list(self.d.keys()), dtype = torch.long)
-        self.vals = torch.tensor(list(self.d.values()), dtype = torch.float)
-        self.is_fixed = True
-        del(self.d)
-
-
-    def observe(self, observe_val):
-        """ Returns a tensor in format:
-            [[word_idx, prob], [word_idx, prob], ...] """
-        remain_idx = torch.where(self.keys[:, 0] == observe_val)[0]
-        return self.keys[remain_idx, 1], self._normalize(self.vals[remain_idx])
-
-    def _normalize(self, part_vals):
-        """ normalize all values to 0 - 100 interval """
-        part_vals = part_vals / (torch.sum(part_vals) * 100)
-        return part_vals
-
+### All functions below are just tests for classes above ###
 
 def basicTest():
     # Factor class basic test
@@ -455,6 +464,7 @@ def basicTest():
     print(test1)    # test __str__
     print(test1[(1,0,1)])   # test __getitem__
     print(test1[(0, 1, 2)])
+
 
 
 def productTest():
@@ -483,6 +493,7 @@ def productTest():
     print(f1*f2)
 
 
+
 def obsNormTest():
     # test observe and normalize
     f = DictionaryFactor([7, 8], [2, 3])
@@ -504,6 +515,7 @@ def obsNormTest():
     print(f)
 
 
+
 def designedObserveSpeedTest():
     f1 = DictionaryFactor([2,3], [30000, 30000])
     for i in range(30000):
@@ -521,6 +533,7 @@ def designedObserveSpeedTest():
     print("fast: {}\nslow: {}".format(ckpt_1 - start, time() - ckpt_1))
 
     
+
 if __name__ == "__main__":
     # basicTest()
     # productTest()

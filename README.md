@@ -14,8 +14,9 @@
 ### model.py : Defines some model
 - saveModel: save a model given file name
 - loadModel: load and return a model given file name
-- PartialModel: a class which defines part of a model, in case that the entire model is too large (not final version, may change in the future)
-- HiddenMarkovModel: a class defines a hidden markov model, after learnDataset(), it can generate output sentence given input sentence
+- AllToAllModel: (There are diagrams explain this model in Pictures folder) a class that defines a PGM, where all input(observed) words are connected to each of the output(target) word, also there are transitions between adjacent pair of output(target) words
+- AllToOneModel: (There are diagrams explain this model in Pictures folder) a class that defines part of an AllToAllModel, because the full AllToAllModel may be too large and time consuming to train, so we divide it into 15 parts, each part is an AllToOneModel
+- HiddenMarkovModel: (There is a diagram explains this model in Pictures folder) a class defines a hidden markov model, after learnDataset(), it can generate output sentence given input sentence
 ### train_and_test.py : Contains some functions that do trainings or testings
 - loadDataset: load a dataset and return the dataset loader, you can use a for loop to get each data from the loader
 - writeLog: print current date and time with a message, also write the same line to log.txt file

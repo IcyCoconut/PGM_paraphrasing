@@ -38,54 +38,31 @@ def writeLog(message: str):
     log_file.close()
 
 
-def buildModel():
-    """ initialize a model """
-    loader = loadDataset()
-    for i in range(MAX_LENGTH):
-        print("Building model X -> y{}".format(i + 1))
-        part_model = model.PartialModel(i + 1)
-        part_model.fillModel(loader)
-        model.saveModel(part_model)
+def all2All_train_save():
+    # TODO: train and save an AllToAllModel
+    pass
 
 
-def learnModel():
-    """ update probabilities in the model """
-    loader = loadDataset(bs = 10)
-    for i in range(3, 5):
-        writeLog("Learning model X -> y{}".format(i + 1))
-
-        part_model = model.loadModel("pos{}.pkl".format(i + 1))
-        part_model.learn(loader)
-        model.saveModel(part_model)
-
-        writeLog("Model X -> y{} saved to pos{}.pkl".format(i + 1, i + 1))
-
-
-def test():
-    # sentence = "what can make physics easy to learn" # input("enter a sentence: ")
-    sentence = wordsToIds("how can i gain weight on my body")[1:-1]
-    print(sentence)
-    prev_word = None
-    for i in range(MAX_LENGTH):
-        part_model = model.loadModel("pos{}.pkl".format(i + 1))
-        w = part_model.getWord(sentence, prev_word)
-        #w = part_model.getWordFast(sentence.to("cuda"), prev_word)
-        prev_word = w
-        if w == 30001:
-            break
-        print(idsToWords([w]))
+def test_all2all():
+    # TODO: test AllToAllModel
+    pass
 
 
 def hmm_train_save():
+    # define a hmm
     m = model.HiddenMarkovModel()
+    # load dataset
     loader = loadDataset()
+    # learn model
     m.learnDataset(loader)
+    # just a very simple test
     sentence = wordsToIds("what is your name")[1:-1]
     print(idsToWords(sentence))
     output = m.getOutput(sentence)
     print(idsToWords(output))
-    with open("model/hmm.pkl", "wb") as out_file:
-        pickle.dump(m, out_file)
+
+    # save the model
+    model.saveModel(m, "hmm.pkl")
 
 
 def test_hmm():

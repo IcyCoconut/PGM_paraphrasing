@@ -14,15 +14,12 @@ Y = [15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29]
 SAVE_PATH = "model/"
 
 
-def saveModel(model):
+def saveModel(model, file_name):
     """ given a model, save it as a pkl file """
-    with open(SAVE_PATH + "pos{}.pkl".format(model.pos), "wb") as out_file:
+    with open(SAVE_PATH + file_name, "wb") as out_file:
         # wo do not want to save redundant data, so keys and vals are excluded
-        if hasattr(model, "keys"):
-            del(model.keys)
-            del(model.vals)
         pickle.dump(model, out_file)
-    print("model save to", SAVE_PATH + "pos{}.pkl".format(model.pos))
+    print("model save to", SAVE_PATH + file_name)
 
 
 def loadModel(file_name):
@@ -33,247 +30,170 @@ def loadModel(file_name):
     return model
 
 
-# we actually need 15 this models to generate the full sentence, so I call this partial
-class PartialModel():
-    def __init__(self, pos: int):
+
+class AllToAllModel():
+    """
+    output(target) word: W = {w1, w2, w3, ... w15}
+    input(observe) word: O = {o1, o2, o3, ... o15}
+
+    255 factors: f(wi, oj), 1<=i<=15, 1<=j<=15
+    14 transition factors: f(wi-1, wi), i = 2, 3, 4, ... 15
+
+    w1 - w2 - w3 - ... - w8 - ... - w13 - w14 - w15
+    |    |    |    ...   |    ...    |     |     |
+    +----+----+--- ... --O--  ... ---+-----+-----+
+    """
+    def __init__(self):
+        self.model_parts = []
+        for i in range(15):
+            self.model_parts.append(AllToOneModel(i + 1))
+
+
+    def learnDataset(self, data_loader):
         """
-        Example: If pos = 2,  we want to get the 2nd word of paraphrase sentence, which is Y[1]
-        If we want 15 factors:
-            f(X[0], Y[1]): given the word at X[0], probabilities of all words at Y[1]
-            f(X[1], Y[1]): given the word at X[1], probabilities of all words at Y[1]
-            f(X[2], Y[1]): given the word at X[2], probabilities of all words at Y[1]
-            ... X[3] to X[13]
-            f(X[14], Y[1]): given the word at X[14], probabilities of all words at Y[1]
+        Learn the dataset, populate all factors that are store in all models
         """
-        n_vars = len(getWordDict()[0])
-        self.pos = pos
+        print("learning dataset")
 
-        # if self.pos != 1:
-        #     self.factor_this_prev = DictionaryFactor([Y[pos - 2], Y[pos - 1]], [n_vars, n_vars])
-
-        self.factor_list = []
-        for factor_idx in range(MAX_LENGTH):
-            self.factor_list.append(
-                DictionaryFactor([X[factor_idx], Y[pos - 1]], [n_vars, n_vars])
-            )
-
-        self.c = 0.1
-
-
-    def fillModel(self, data_loader):
-        """
-        Read the dataset and fill the model, fill the factors
-        For example, if the input words are "I want to sleep" and the target words are "I will nap"
-        self.pos = 2, the target word is "will"
-        So, P("will" | "I"), P("will", | "want"), P("will", "to"), P("will", "sleep") will increase
-         P("will", "<EOS>") will not increase
-        """
-        print("Filling model with data\ndata filled:")
         count = 0
         for sample in data_loader:
-            # not that data and target is batched, but the batch size is 1
-            # so use [0] to access this sample
-            # [1] only mean get the first word. Note that [0] is <BOS>
             input_sentence = sample["input"][0]
             target_sentence = sample["target"][0]
 
-            # NOTE: target_word & input_word are actually indecies of words, instead of word strings
-            target_word = int(target_sentence[self.pos])
+            prev_word = None
+            for word_idx in range(2, 16):
+                target_word = int(target_sentence[word_idx])
+                self.model_parts[word_idx].populateFactors(input_sentence, target_word, prev_word)
+                prev_word = target_word
 
-            for word_idx in range(MAX_LENGTH):
-                # note that word_idx is 0 is always <BOS>
-                input_word = int(input_sentence[word_idx + 1])
-                if input_word == EOS_ID:
-                    break
-                self.factor_list[word_idx][(input_word, target_word)] += 1
-            
-            # if self.pos > 1:
-            #     prev_target_word = int(target_sentence[self.pos - 1])
-            #     self.factor_this_prev[(prev_target_word, target_word)] += 1
-
-            print("{}\t".format(count), end = "\r")
+            print("{}/127940".format(count), end = "\r")
             count += 1
-        print("\ndone")
+        print("127940/127940")
+
+        for i in range(15):
+            self.model_parts[i].fixed()
 
 
-    def learnTestMode(self):
-        for i in range(MAX_LENGTH):
-            print(self.factor_list[i].getNonZeroEntryCount())
-            self.factor_list[i].learnMode()
+    def assignModels(self, models):
+        """
+        If all AllToOneModel are trained and stored separately
+        We can load these models separately and use this function to put them together
+        """
+        self.model_parts = models
 
-        if self.pos > 1:
-            self.factor_this_prev.learnMode()
+
+    def getOutput(self, input_sentence):
+        # TODO: use self.model_parts to get each single words and put then together as a sentence
+        pass
 
 
-    def learn(self, data_loader):
-        # start = time()
-        # part_time = 0
-        
-        print("Prograss:")
-        count = 0
-        tens_thousand = 0
 
-        self.learnTestMode()
+# we actually need 15 this models to generate the full sentence, so I call this partial
+class AllToOneModel():
+    """
+    output(target) word: wi
+    input(observe) words: O = {o1, o2, o3, ... o15}
 
-        for sample_batch in data_loader:
-            sample_batch["input"] = sample_batch["input"].to("cuda")
-            # 10 items in a batch
-            for i in range(10):
-                # load a pair of data
-                input_sentence = sample_batch["input"][i]
-                target_sentence = sample_batch["target"][i]
+    15 factors: f(wi, ok), k = 1, 2, 3, 4, ... 15
+    1 transition factor: f(wi-1, wi) only if i != 1
+    
+    wi-1 (if i != 1)------+
+                          |
+    +----+----+--- ... ---wi--- ... ----+----+----+
+    |    |    |    ...    |     ...    |    |    |
+    o1   o2   o3   ...    o8    ...   o13  o14  o15
+    """
+    def __init__(self, output_idx):
+        self.factors = []
+        for i in range(15):
+            self.factors.append(HmmFactor())
 
-                # get target word and previous target word
-                target_word = int(target_sentence[self.pos])
-                prev_word = None if self.pos <= 1 else int(target_sentence[self.pos - 1])
+        self.transition = HmmFactor() # this is f(wi-1, wi)
+        self.output_idx = output_idx # this is i in wi
 
-                # if count == tens_thousand:
-                #     for i in range(MAX_LENGTH):
-                #         self.factor_list[i].learnMode()
-                #     if self.pos > 1:
-                #         self.factor_this_prev.learnMode()
-                #     tens_thousand += 10000
+    
+    def populateFactors(self, input_sentence, target_word, prev_word = None):
+        """
+        input sentence is o1 to o15
+        target_word is wi
+        prev_word is wi-1
+        """
 
-                # use this model to generate an output word
-                # part_start = time()
-                output_word = self.getWordFast(input_sentence[1:-1], prev_word)
-                # part_time += time() - part_start
+        for word_idx in range(1, 16):
+            input_word = int(input_sentence[word_idx])
+            self.factors[word_idx - 1][(input_word, target_word)] += 1
 
-                # if the output word is not target word
-                # then P(target word | input word) shoud increase
-                # ans P(output word | input word) should drcrease
-                # for all factors
-                if output_word != target_word:
-                    for i in range(MAX_LENGTH):
-                        input_word = int(input_sentence[i + 1])
-                        self.factor_list[i][(input_word, output_word)] -= 1
-                        self.factor_list[i][(input_word, target_word)] += 1
+        self.transition[(prev_word, target_word)] += 1
 
-                    if self.pos > 1:
-                        self.factor_this_prev[(prev_word, output_word)] -= 1
-                        self.factor_this_prev[(prev_word, target_word)] += 1
-
-                #print("total time: {:.5f}, getWord time: {:.5f}".format(time() - start, part_time))
-                print("{}/{}\t".format(count,DATA_COUNT), end = "\r")
-                count += 1
+    
+    def fixed(self):
+        """
+        When all data is learnt, the entire dataset is studied
+        We do not need to change all factors
+        So call fixed() method on each factor, that makes observation and getWord faster
+        and fixed() also normalizes these factors
+        """
+        for i in range(15):
+            self.factors[i].fixed()
+        self.transition.fixed()
 
 
     def getWord(self, input_sentence, prev_word = None):
         """
-        input_sentence is a list of ids!
-        prev_word is the previous word (in index form)
-        given the input sentence, the function choose and return a word, with its occurances
+        Given the entire input sentence {o1, o2, o3, ..., o15}
+        Generate and return a single output word wi
         """
 
-        ids = input_sentence
-        # word_choices in format: {word_index : probability}
-        word_choices = dict()
-        for i in range(MAX_LENGTH):
-            # observe ith word is ids[i]
-            # words_probs is a tensor in format:
-            # [[word_id_1, word_id_2, word_id_3, ...
-            #   prob_1   , prob_2,    prob_3   , ...]]
-            temp_factor = self.factor_list[i].copy()
-            temp_factor.observe(X[i], ids[i])
+        all_words = torch.zeros(0)
+        all_probs = torch.zeros(0)
 
-            # distance is how far away this word is to the target word
-            # further distance may lead to less connection, so less weight
-            distance = abs(self.pos - (i+1))
-            # iterate all possible words, if the word not in word choices then add it, if exists then update the value
-            for k in temp_factor.dictionary:
-                # k is the index for a word
-                if word_choices.get(k) == None:
-                    word_choices[k] = self.c ** distance * self.factor_list[i][k]
-                else:
-                    word_choices[k] += self.c ** distance * self.factor_list[i][k]
+        for i in range(15):
+            observe_word = input_sentence[i]
 
-        # given the previous word (observed), get the probability of this word
-        # if self.pos > 1 and prev_word != None:
-        #     temp_factor = self.factor_this_prev.copy()
-        #     temp_factor.observe(Y[self.pos - 2], prev_word)
-        #     for wc in word_choices:
-        #         if wc in self.factor_this_prev.dictionary:
-        #             word_choices[wc] += 0 * self.factor_this_prev[wc]
-        # new word_choices should contain all possible word choices and their probability
-        # for this position, we want the maximum one for now
-        max_k = list(word_choices.keys())[0]
-        for k in word_choices:
-            if word_choices[k] > word_choices[max_k]:
-                max_k = k
-        
-        return max_k[0]
+            words, probs = self.factors[i].observe(observe_word)
 
+            # join factors
+            all_words, idx = torch.unique(torch.cat((all_words, words)), return_inverse = True)
+            concat_probs = torch.cat((all_probs, probs))
+            new_probs = torch.zeros_like(words)
+            for j in range(concat_probs.size(0)):
+                new_probs[idx[j]] = concat_probs[j]
+            all_probs = new_probs
 
-    def getWordFast(self, input_sentence, prev_word = None):
-        """
-        Make use of pytorch
-        """
-        # word_choices is a tensor: wor_choices[word_index] = probability of word
-        word_choices = torch.zeros(30003, device="cuda")
-        #total = 0
-        for i in range(MAX_LENGTH):
-            # observe ith word is ids[i]
-            # words_probs is a tensor in format:
-            # [[word_id_1, word_id_2, word_id_3, ...
-            #   prob_1   , prob_2,    prob_3   , ...]]
-            #start = time()
-            words, probs = self.factor_list[i].fastObserve(input_sentence[i])
-            #total += time() - start
-            # distance is how far away this word is to the target word
-            # further distance may lead to less connection, so less weight
-            distance = abs(self.pos - (i+1))
-            # iterate all possible words, if the word not in word choices then add it, if exists then update the value
-            if words.size(0) == 0:
-                continue
-            word_choices[words] += self.c ** distance * probs
-        #print(total)
+        if prev_word != None:
+            words, probs = self.transition.observe(prev_word)
+            # join factors
+            all_words, idx = torch.unique(torch.cat((all_words, words)), return_inverse = True)
+            concat_probs = torch.cat((all_probs, probs))
+            new_probs = torch.zeros_like(words)
+            for j in range(concat_probs.size(0)):
+                new_probs[idx[j]] = concat_probs[j]
+            all_probs = new_probs
 
-        # given the previous word (observed), get the probability of this word
-        if self.pos > 1 and torch.is_tensor(prev_word):
-            words, probs = self.factor_this_prev.fastObserve(prev_word)
-            if words.size(0) != 0:
-                word_choices[words] += probs
-        # new word_choices should contain all possible word choices and their probability
-        # for this position, we want the maximum one for now
-        return torch.argmax(word_choices)
+        # now all_words and all_probs contains all posible words with its probability
+        try:
+            chosen_idx = torch.argmax(all_probs)
+            result = all_words[chosen_idx]
+        except:
+            result = input_sentence[self.output_idx]
 
+        return result
 
-    def getWords(self, input_sentence, num, prev_word = None):
-        """
-        Similar to getWord, but this returns num words, all of them are possible choices
-        """
-        ids = wordsToIds(input_sentence)
-        # word_choices in format: {word_index : probability}
-        word_choices = dict()
-        for i in range(MAX_LENGTH):
-            # observe ith word is ids[i]
-            self.factor_list[i].observe(X[i], ids[i])
-            # distance is how far away this word is to the target word
-            # further distance may lead to less connection, so less weight
-            distance = abs(self.pos - (i+1))
-            # iterate all possible words, if the word not in word choices then add it, if exists then update the value
-            for k in self.factor_list[i].dictionary:
-                # k is the index for a word
-                if word_choices.get(k) == None:
-                    word_choices[k] = self.c ** distance * self.factor_list[i][k]
-                else:
-                    word_choices[k] += self.c ** distance * self.factor_list[i][k]
-
-        # given the previous word (observed), get the probability of this word
-        if self.pos > 1 and prev_word != None:
-            self.factor_this_prev.observe(Y[self.pos - 2], prev_word)
-            for wc in word_choices:
-                if wc in self.factor_this_prev.dictionary:
-                    word_choices[wc] += 0 * self.factor_this_prev[wc]
-        
-        # new word_choices should contain all possible word choices and their probability
-        # for this position, we want the maximum one for now
-        best_choices = sorted(word_choices, key = lambda x : word_choices[x], reverse = True)
-        
-        return [x[0] for x in best_choices[:num]]
 
 
 class HiddenMarkovModel():
+    """
+    output(target) words: W = {w1, w2, w3, ... w15}
+    input(observe) words: O = {o1, o2, o3, ... o15}
+
+    14 transition factors: f(wk, wk+1), k = 1, 2, 3, ... 14
+    15 emission factors: f(ok, wk), k = 1, 2, 3, ... 15
+
+    w1 - w2 - w3 - w4 - ... - w15
+    |    |    |    |    ...    |
+    o1   o2   o3   o4   ...   o15
+
+    """
     def __init__(self):
         # 15 emission factors phi(oi, wi)
         self.emiss_factors = []
