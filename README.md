@@ -25,3 +25,6 @@
 - test: test a model (not HMM, so will change)
 - hmm_train_save: train and save a HMM
 - test_hmm: using 20000 test set sentences, and get 20000 output sentences, save the result
+### evaluate.py : A file used to evaluate or test the model
+### utils.py : A files contins some functions that will be used in evaluate.py
+### data.py : not important, just prevent import error of evaluate.py or utils.py
