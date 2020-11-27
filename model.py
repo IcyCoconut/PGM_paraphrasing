@@ -61,7 +61,7 @@ class AllToAllModel():
             target_sentence = sample["target"][0]
 
             prev_word = None
-            for word_idx in range(2, 16):
+            for word_idx in range(1, 16):
                 target_word = int(target_sentence[word_idx])
                 self.model_parts[word_idx - 1].populateFactors(
                     input_sentence, target_word, prev_word
@@ -72,8 +72,10 @@ class AllToAllModel():
             count += 1
         print("127940/127940")
 
+        print("before fixed", list(self.model_parts[0].factors[0].d.keys())[:10])
         for i in range(15):
             self.model_parts[i].fixed()
+        print("after fixed", self.model_parts[0].factors[0].keys[:10])
 
 
     def loadParts(self):
@@ -174,40 +176,51 @@ class AllToOneModel():
         Generate and return a single output word wi
         """
 
-        all_words = torch.zeros(0)
-        all_probs = torch.zeros(0)
+        all_words = torch.zeros(0, dtype=torch.long)
+        all_probs = torch.zeros(0, dtype=torch.float32)
 
         for i in range(15):
             observe_word = input_sentence[i]
-
             words, probs = self.factors[i].observe(observe_word)
             probs *= self.weights[i]
 
             # join factors
             all_words, idx = torch.unique(torch.cat((all_words, words)), return_inverse = True)
             concat_probs = torch.cat((all_probs, probs))
-            new_probs = torch.zeros_like(words)
+            new_probs = torch.zeros_like(all_words, dtype=torch.float32)
+
             for j in range(concat_probs.size(0)):
-                new_probs[idx[j]] = concat_probs[j]
+                new_probs[idx[j]] += concat_probs[j]
             all_probs = new_probs
 
-        if prev_word != None:
+
+        if torch.is_tensor(prev_word):
             words, probs = self.transition.observe(prev_word)
             # join factors
             all_words, idx = torch.unique(torch.cat((all_words, words)), return_inverse = True)
             concat_probs = torch.cat((all_probs, probs))
-            new_probs = torch.zeros_like(words)
+            new_probs = torch.zeros_like(all_words, dtype=torch.float32)
             for j in range(concat_probs.size(0)):
-                new_probs[idx[j]] = concat_probs[j]
+                new_probs[idx[j]] += concat_probs[j]
             all_probs = new_probs
 
         # now all_words and all_probs contains all posible words with its probability
         try:
             chosen_idx = torch.argmax(all_probs)
             result = all_words[chosen_idx]
+            if int(result) == UNK_ID:
+                all_probs[chosen_idx] = 0
+                chosen_idx = torch.argmax(all_probs)
+                result = all_words[chosen_idx]
+                _, idxx = torch.sort(all_probs, descending=False)
+                print(all_probs[idxx[:10]])
+                print(all_words[idxx[:10]])
+                print(result)
         except:
             result = input_sentence[self.output_idx]
 
+        
+            
         return result
 
 

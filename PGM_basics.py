@@ -42,20 +42,17 @@ class HmmFactor():
         When the probabilities are all fixed (dataset learnt), call this function
         The dictionary is converted to 2 tensors, this makes searching faster, but you cannot get or set items, you can now only observe
         """
-        try:
-            self.keys = torch.tensor(list(self.d.keys()), dtype = torch.long)
-            self.vals = torch.tensor(list(self.d.values()), dtype = torch.float)
-        except TypeError:
-            ks = list(self.d.keys())
-            print(len(ks), ks[:10])
+
+        self.keys = torch.tensor(list(self.d.keys()), dtype = torch.long)
+        self.vals = torch.tensor(list(self.d.values()), dtype = torch.float)
         self.is_fixed = True
         del(self.d)
+
 
 
     def observe(self, observe_val):
         """ Returns a tensor in format:
             [[word_idx, prob], [word_idx, prob], ...] """
-        print(self.keys.size())
         remain_idx = torch.where(self.keys[:, 0] == observe_val)[0]
         return self.keys[remain_idx, 1], self._normalize(self.vals[remain_idx])
 

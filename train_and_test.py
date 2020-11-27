@@ -45,7 +45,13 @@ def all2All_train_save():
     loader = loadDataset()
     ata_model.learnDataset(loader)
 
+    try:
+        print("before save", ata_model.model_parts[0].factors[0].keys[:10])
+    except:
+        print("before save", ata_model.model_parts[0].factors[0].keys)
+
     ata_model.saveToParts()
+    
     writeLog("AllToAllModel saved")
 
     sentence = wordsToIds("how do i know someone blocked me on facebook")[1:-1]
@@ -56,6 +62,7 @@ def all2All_train_save():
 
 
 def test_all2all():
+
     m = model.AllToAllModel()
     m.loadParts()
     sentence = wordsToIds("what is your name")[1:-1]
@@ -69,18 +76,22 @@ def test_all2all():
     with open("data/testdata/result.txt", "a") as result_file:
         c = 0
         for sample in loader:
-            if c > 3767:
-                input_sentence = sample["input"][0][1:-1]
-                #target_sentence = sample["target"][0]
+            input_sentence = sample["input"][0][1:-1]
+            #target_sentence = sample["target"][0]
 
-                output = idsToWords(m.getOutput(input_sentence))
-                
-                try:
-                    last_index = output.index("<EOS>")
-                    line = " ".join(output[:last_index]) + "\n"
-                except:
-                    line = " ".join(output) + "\n"
-                result_file.write(line)
+            output = idsToWords(m.getOutput(input_sentence))
+            
+            try:
+                last_index = -1
+                for idx in range(14, -1,-1):
+                    if output[idx] != "<EOS>":
+                        last_index = idx + 1
+                        break
+                line = " ".join(output[:last_index]) + "\n"
+            except:
+                line = " ".join(output) + "\n"
+
+            result_file.write(line)
 
             print(c, end = "\r")
             c += 1
@@ -137,7 +148,7 @@ if __name__ == "__main__":
     # test()
     # hmm_train_save()
     # test_hmm()
-    # all2All_train_save()
+    #all2All_train_save()
     test_all2all()
 
 
