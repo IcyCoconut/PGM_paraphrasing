@@ -63,7 +63,9 @@ class AllToAllModel():
             prev_word = None
             for word_idx in range(2, 16):
                 target_word = int(target_sentence[word_idx])
-                self.model_parts[word_idx].populateFactors(input_sentence, target_word, prev_word)
+                self.model_parts[word_idx - 1].populateFactors(
+                    input_sentence, target_word, prev_word
+                )
                 prev_word = target_word
 
             print("{}/127940".format(count), end = "\r")
@@ -74,18 +76,44 @@ class AllToAllModel():
             self.model_parts[i].fixed()
 
 
-    def assignModels(self, models):
+    def loadParts(self):
         """
         If all AllToOneModel are trained and stored separately
         We can load these models separately and use this function to put them together
         """
-        self.model_parts = models
+        for i in range(15):
+            self.model_parts[i] = loadModel("ato_{}.pkl".format(str(i)))
+
+
+    def setWeights(self, decay):
+        """
+        weight is the penalty to words thet are far away from this word
+        For example, if we want to generate output word 6
+        Then input word 6 should have a greater influence on this word than input word 1
+        Because input word 1 is farther away from output word 6 than input word 6
+        We achieve this by giving weights to each word
+        For output word i, input word j has a weight of decay ** |i-j|
+        If decay = 0.7, for output word 3, input word 1 has a weight of 0.7^(3-1) = 0.7^2 = 0.49
+        So for output word 3, all input word weights are:
+        [0.49, 0.7, 1, 0.7, 0.49, 0.343, 0.2401, ...]
+        """
+        for i in range(15):
+            self.model_parts[i].weights = decay ** torch.abs(torch.arange(15.0) - i)
 
 
     def getOutput(self, input_sentence):
-        # TODO: use self.model_parts to get each single words and put then together as a sentence
-        pass
+        # TODO: use self.model_parts to get each single words and then put together as a sentence
+        output_sentence = []
+        prev_word = None
+        for i in range(15):
+            output_sentence.append(self.model_parts[i].getWord(input_sentence, prev_word))
+            prev_word = output_sentence[-1]
+        return output_sentence
 
+
+    def saveToParts(self):
+        for i in range(15):
+            saveModel(self.model_parts[i], "ato_{}.pkl".format(str(i)))
 
 
 # we actually need 15 this models to generate the full sentence, so I call this partial
@@ -110,6 +138,7 @@ class AllToOneModel():
 
         self.transition = HmmFactor() # this is f(wi-1, wi)
         self.output_idx = output_idx # this is i in wi
+        self.weights = torch.ones(15)
 
     
     def populateFactors(self, input_sentence, target_word, prev_word = None):
@@ -123,7 +152,8 @@ class AllToOneModel():
             input_word = int(input_sentence[word_idx])
             self.factors[word_idx - 1][(input_word, target_word)] += 1
 
-        self.transition[(prev_word, target_word)] += 1
+        if prev_word != None:
+            self.transition[(prev_word, target_word)] += 1
 
     
     def fixed(self):
@@ -151,6 +181,7 @@ class AllToOneModel():
             observe_word = input_sentence[i]
 
             words, probs = self.factors[i].observe(observe_word)
+            probs *= self.weights[i]
 
             # join factors
             all_words, idx = torch.unique(torch.cat((all_words, words)), return_inverse = True)

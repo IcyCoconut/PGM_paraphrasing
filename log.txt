@@ -1,25 +1,9 @@
 2020-11-19 00:52:36.132884	test
 
-2020-11-19 01:26:33.795409	Learning model X -> y4
-2020-11-19 02:13:21.081009	Learning model X -> y4
-2020-11-19 02:18:44.472985	Learning model X -> y4
-2020-11-19 02:20:32.735436	Learning model X -> y4
-2020-11-19 02:22:22.519975	Learning model X -> y4
-2020-11-19 02:24:27.801091	Learning model X -> y4
-2020-11-19 02:26:43.933384	Learning model X -> y4
-2020-11-19 02:31:13.282706	Learning model X -> y4
-2020-11-19 02:41:19.351205	Learning model X -> y4
-2020-11-19 02:43:13.865448	Learning model X -> y4
-2020-11-19 02:49:25.543481	Learning model X -> y4
-2020-11-19 02:50:59.359266	Learning model X -> y4
-2020-11-19 02:54:09.107966	Learning model X -> y4
-2020-11-19 03:02:26.736225	Learning model X -> y4
-2020-11-19 03:04:58.477964	Learning model X -> y4
-2020-11-19 03:07:12.073106	Learning model X -> y4
-2020-11-19 03:08:50.894457	Learning model X -> y4
-2020-11-19 03:14:35.993576	Learning model X -> y4
-2020-11-19 03:16:57.806458	Learning model X -> y4
-2020-11-19 03:18:57.315414	Learning model X -> y4
-2020-11-19 03:45:30.043177	Model X -> y4 saved to pos4.pkl
-2020-11-19 03:45:30.051156	Learning model X -> y5
-2020-11-19 04:06:30.542058	Model X -> y5 saved to pos5.pkl
+
+2020-11-26 18:50:38.078035	start train AllToAllModel
+2020-11-26 18:54:03.206123	start train AllToAllModel
+2020-11-26 19:03:58.013285	start train AllToAllModel
+2020-11-26 19:13:03.897446	AllToAllModel saved
+2020-11-26 19:26:44.333738	start train AllToAllModel
+2020-11-26 19:32:52.516224	AllToAllModel saved

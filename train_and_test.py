@@ -40,12 +40,50 @@ def writeLog(message: str):
 
 def all2All_train_save():
     # TODO: train and save an AllToAllModel
-    pass
+    writeLog("start train AllToAllModel")
+    ata_model = model.AllToAllModel()
+    loader = loadDataset()
+    ata_model.learnDataset(loader)
+
+    ata_model.saveToParts()
+    writeLog("AllToAllModel saved")
+
+    sentence = wordsToIds("how do i know someone blocked me on facebook")[1:-1]
+    print(idsToWords(sentence))
+    ata_model.setWeights(0.8)
+    output = ata_model.getOutput(sentence)
+    print(idsToWords(output))
 
 
 def test_all2all():
-    # TODO: test AllToAllModel
-    pass
+    m = model.AllToAllModel()
+    m.loadParts()
+    sentence = wordsToIds("what is your name")[1:-1]
+    print(idsToWords(sentence))
+    m.setWeights(0.8)
+    output = m.getOutput(sentence)
+    print(idsToWords(output))
+
+    loader = loadDataset(set_name = "test")
+
+    with open("data/testdata/result.txt", "a") as result_file:
+        c = 0
+        for sample in loader:
+            if c > 3767:
+                input_sentence = sample["input"][0][1:-1]
+                #target_sentence = sample["target"][0]
+
+                output = idsToWords(m.getOutput(input_sentence))
+                
+                try:
+                    last_index = output.index("<EOS>")
+                    line = " ".join(output[:last_index]) + "\n"
+                except:
+                    line = " ".join(output) + "\n"
+                result_file.write(line)
+
+            print(c, end = "\r")
+            c += 1
 
 
 def hmm_train_save():
@@ -98,6 +136,8 @@ if __name__ == "__main__":
     # learnModel()
     # test()
     # hmm_train_save()
-    test_hmm()
+    # test_hmm()
+    # all2All_train_save()
+    test_all2all()
 
 
