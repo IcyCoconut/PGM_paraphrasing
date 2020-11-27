@@ -20,9 +20,6 @@
 ### train_and_test.py : Contains some functions that do trainings or testings
 - loadDataset: load a dataset and return the dataset loader, you can use a for loop to get each data from the loader
 - writeLog: print current date and time with a message, also write the same line to log.txt file
-- buildModel: build and save a complete model (not HMM for now, it will change in the future)
-- learnModel: learn a model (not HMM for now, it will change in the future)
-- test: test a model (not HMM, so will change)
 - hmm_train_save: train and save a HMM
 - test_hmm: using 20000 test set sentences, and get 20000 output sentences, save the result
 ### evaluate.py : A file used to evaluate or test the model
