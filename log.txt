@@ -21,3 +21,5 @@
 2020-11-26 21:26:40.293497	AllToAllModel saved
 2020-11-26 21:28:23.901187	start train AllToAllModel
 2020-11-26 21:34:52.826275	AllToAllModel saved
+2020-11-26 22:40:52.652333	start train AllToAllModel
+2020-11-26 22:54:02.448696	AllToAllModel saved

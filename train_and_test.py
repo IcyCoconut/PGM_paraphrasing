@@ -148,7 +148,7 @@ if __name__ == "__main__":
     # test()
     # hmm_train_save()
     # test_hmm()
-    #all2All_train_save()
+    # all2All_train_save()
     test_all2all()
 
 
